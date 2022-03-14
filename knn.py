@@ -1,9 +1,7 @@
 #Bosco Aranguren
 #Plantilla de algoritmo de prediccion knn
 
-import getopt
 import sys
-import os
 import csv
 from unicodedata import name
 from wsgiref import headers
@@ -13,22 +11,54 @@ import sklearn as sk
 import imblearn
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 from sklearn.neighbors import KNeighborsClassifier
+import pickle
 
-oFile="output.out"
 hf = []
+test = []
+trainX = []
+trainY = []
+testX = []
+testY = []
+resultados = dict
+target_map = {'Iris-setosa': 1, 'Iris-versicolor': 2, 'Iris-virginica': 3}
+clf = object
+mp = 0
+mk = 0
+max_fscore=0
 
 #GESTIONA LOS BUCLES DE K Y P
 def main():
     file=raw_input("Path del archivo .csv: ")
+    target=raw_input("Nombre del dato que se quiere calcular: ")
+    k_max=int(raw_input("Introduce el k maximo: "))
+    p_max=int(raw_input("Introduce el p maximo: "))
     get_features(file)
-    for k in range(1, 2, 2):
-        for p in range(1, 2, 2):
-            knn(file,k,p)
+    preparar_datos(file, target)
+    with open("resultados.csv", 'w') as csvfile:
+        parametros=['k', 'p', 'class', 'accuracy', 'recall', 'fscore', 'precision']
+        writer=csv.DictWriter(csvfile, fieldnames=parametros)
+        writer.writeheader
+        writer.writerow({'k': "K", 'p': "P", 'class': "CLASS", 'accuracy': "ACCURACY", 'recall': "RECALL ", 'fscore': "F-SCORE ", 'precision': "PRECISION"})
+    for k in range(1, k_max+1, 2):
+        for p in range(1, p_max+1, 2):
+            print("Ejecutando algoritmo knn con k=" + str(k) + " p=" + str(p))
+            knn(k, p)
             print("Ejecucion de algoritmo knn terminada con k=" + str(k) + " p=" + str(p))
+            write_csv(k, p, resultados)
+    guardar_modelo=raw_input("Quieres guardar el modelo? S/N: ")
+    if guardar_modelo=='S' or guardar_modelo=='s':
+        n_modelo = raw_input("Nombre del modelo: ")
+        print("Se recomienda usar k = " + str(mk) + " y p = " + str(mp))
+        k=int(raw_input("k para el modelo: "))
+        p=int(raw_input("p para el modelo: "))
+        knn(k,p)
+        n_modelo = n_modelo+".sav"
+        save_model = pickle.dump(clf, open(n_modelo,'wb'))
+        print("Modelo guardado correctamente empleando Pickle")
 
 
 #OBTIENE EL NOMBRE DE LAS FEATURES Y LO ALMACENA EN LA VARIBALE GLOBAL hf (headers features)
@@ -49,7 +79,7 @@ def coerce_to_unicode(x):
         return str(x)
 
 #ALGORITMO KNN QUE RECIBE: f: DIRECCION DEL FICHERO, k, p, hf: headers features
-def knn(f, k, p):
+def preparar_datos(f, t):
     #Abrir el fichero .csv y cargarlo en un dataframe de pandas
     ml_dataset = pd.read_csv(f)
     ml_dataset = ml_dataset[hf]
@@ -57,8 +87,13 @@ def knn(f, k, p):
     #CONVERTIR A UNICODE LOS NOMBRES DE COLUMNAS
     #MODIFICAR PARA INTRODUCIR CADA FEATURE EN SU TIPO
     categorical_features = []
-    numerical_features = hf
+    numerical_features = []
     text_features = []
+    for feature in ml_dataset:
+        if ml_dataset[feature].dtype == object:
+            categorical_features.append(feature)
+        else:
+            numerical_features.append(feature)    
     for feature in categorical_features:
         ml_dataset[feature] = ml_dataset[feature].apply(coerce_to_unicode)
     for feature in text_features:
@@ -72,33 +107,39 @@ def knn(f, k, p):
 
     #PASAR COLUMNA TARGET(DOUBLE) A __target__(0-1)
     #CAMBIAR DEPENDIENDO DEL TIPO DE FEATURE QUE SE QUIERA CLASIFICAR Y EL NOMBRE DE LA FEATURE
-    target_map = {'0.0': 0, '1.0': 1}
-    ml_dataset['__target__'] = ml_dataset['TARGET'].map(str).map(target_map)
-    del ml_dataset['TARGET']
+    ml_dataset['__target__'] = ml_dataset[t].map(str).map(target_map)
+    del ml_dataset[t]
+    hf.remove(t)
+    hf.append('__target__')
 
     #ELIMINAR FILAS EN LAS QUE TARGET ES NULL
     #DF = DF[ ! DF[TARGET] == NULL]     ~ INVIERTE TRUE Y FALSE
     ml_dataset = ml_dataset[~ml_dataset['__target__'].isnull()]
-    '''
 
-    train, test = train_test_split(ml_dataset,test_size=0.2,random_state=42,stratify=ml_dataset[['__target__']])
-    print(train.head(5))
+    #DIVIDIR LA MUESTRA EN TRAIN Y TEST. RANDOME_STATE=SEED
+    global test
+    train,  test = train_test_split(ml_dataset,test_size=0.2,random_state=42,stratify=ml_dataset[['__target__']])
+    print("Train: ")
     print(train['__target__'].value_counts())
+    print("Test: ")
     print(test['__target__'].value_counts())
 
     drop_rows_when_missing = []
     impute_when_missing = []
+
+    #SI SE QUIERE ELIMINAR LOS VALORES FALTANTES SE USA DROP_ROWS_WHEN_MISSING, PARA INTRODUCIR VALORES APROX SE USA IMPUT_WHEN_MISSING
     for feature in hf:
         missing = {'feature': feature, 'impute_with': 'MEAN'}
         impute_when_missing.append(missing)
 
-    # Explica lo que se hace en este paso
+    #ELIMINAR DE TRAIN Y TEST VALORES FALTANTES
     for feature in drop_rows_when_missing:
         train = train[train[feature].notnull()]
         test = test[test[feature].notnull()]
         print('Dropped missing records in %s' % feature)
 
-    # Explica lo que se hace en este paso
+    
+    # DEPENDIENDO DE LO QUE SE HAYA ALMACENADO EN IMPUTE_WITH DE LA FEATURE SE CALCULA EL VALOR QUE SE VA A SUSTITUIR
     for feature in impute_when_missing:
         if feature['impute_with'] == 'MEAN':
             v = train[feature['feature']].mean()
@@ -110,15 +151,18 @@ def knn(f, k, p):
             v = train[feature['feature']].value_counts().index[0]
         elif feature['impute_with'] == 'CONSTANT':
             v = feature['value']
+        #SUSTITUYE EL VALOR V CALCULADO EN LOS VALORES FALTANTES
         train[feature['feature']] = train[feature['feature']].fillna(v)
         test[feature['feature']] = test[feature['feature']].fillna(v)
-        print('Imputed missing values in feature %s with value %s' % (feature['feature'], coerce_to_unicode(v)))
 
     #REESCALADO DE PARAMETROS
+    #PARA TODAS LAS FEATURES SE PREPARA EL AVGSTD
     rescale_features = {}
     for feature in hf:
-        rescale_features.update({hf : 'AVGSTD'})
-        
+        rescale_features.update({feature : 'AVGSTD'})
+ 
+    #PARA TODAS LAS FEATURES DE TRAIN, SI EL RESCALE METHOD ES MINMAX ______ SINO (AVGSTD) SE CALCULA LA MEDIA Y LA VARIANZA, SI LA VARIANZA ES MUY PEQUENA SE ELIMINA
+    #LA FEATURE PORQUE NO PRESENTA CAMBIOS. SI LA VARIANZA ES SIGNIFICATIVA SE LE RESTA A CADA VALOR LA MEDIA Y SE DIVIDE ENTRE LA VARIANZA PARA REESCALARLOS
     for (feature_name, rescale_method) in rescale_features.items():
         if rescale_method == 'MINMAX':
             _min = train[feature_name].min()
@@ -128,65 +172,14 @@ def knn(f, k, p):
         else:
             shift = train[feature_name].mean()
             scale = train[feature_name].std()
-        if scale == 0.:
+        if scale == 0. and feature_name!='__target__':
             del train[feature_name]
             del test[feature_name]
-            print('Feature %s was dropped because it has no variance' % feature_name)
-        else:
-            print('Rescaled %s' % feature_name)
-    train[feature_name] = (train[feature_name] - shift).astype(np.float64) / scale
-    test[feature_name] = (test[feature_name] - shift).astype(np.float64) / scale
-
-    drop_rows_when_missing = []
-    impute_when_missing = []
-    for feature in hf:
-        missing = {'feature': feature, 'impute_with': 'MEAN'}
-        impute_when_missing.append(missing)
-
-        # Features for which we drop rows with missing values"
-    for feature in drop_rows_when_missing:
-        train = train[train[feature].notnull()]
-        test = test[test[feature].notnull()]
-        print('Dropped missing records in %s' % feature)
-
-    # Explica lo que se hace en este paso
-    for feature in impute_when_missing:
-        if feature['impute_with'] == 'MEAN':
-            v = train[feature['feature']].mean()
-        elif feature['impute_with'] == 'MEDIAN':
-            v = train[feature['feature']].median()
-        elif feature['impute_with'] == 'CREATE_CATEGORY':
-            v = 'NULL_CATEGORY'
-        elif feature['impute_with'] == 'MODE':
-            v = train[feature['feature']].value_counts().index[0]
-        elif feature['impute_with'] == 'CONSTANT':
-            v = feature['value']
-        train[feature['feature']] = train[feature['feature']].fillna(v)
-        test[feature['feature']] = test[feature['feature']].fillna(v)
-        print('Imputed missing values in feature %s with value %s' % (feature['feature'], coerce_to_unicode(v)))
-
-    rescale_features = {}
-    for feature in hf:
-        rescale_features.update({hf : 'AVGSTD'})
-
-    # Explica lo que se hace en este paso
-    for (feature_name, rescale_method) in rescale_features.items():
-        if rescale_method == 'MINMAX':
-            _min = train[feature_name].min()
-            _max = train[feature_name].max()
-            scale = _max - _min
-            shift = _min
-        else:
-            shift = train[feature_name].mean()
-            scale = train[feature_name].std()
-        if scale == 0.:
-            del train[feature_name]
-            del test[feature_name]
-            print('Feature %s was dropped because it has no variance' % feature_name)
-        else:
-            print('Rescaled %s' % feature_name)
+        elif feature_name!='__target__':
             train[feature_name] = (train[feature_name] - shift).astype(np.float64) / scale
-            test[feature_name] = (test[feature_name] - shift).astype(np.float64) / scale
+            test[feature_name] = (test[feature_name] - shift).astype(np.float64) / scale  
+
+    global trainX, trainY, testX, testY
 
     trainX = train.drop('__target__', axis=1)
     #trainY = train['__target__']
@@ -197,42 +190,39 @@ def knn(f, k, p):
     trainY = np.array(train['__target__'])
     testY = np.array(test['__target__'])
 
-    # Explica lo que se hace en este paso
-    undersample = RandomUnderSampler(sampling_strategy=0.5)#la mayoria va a estar representada el doble de veces
+    # RALIZA EN UNDERSAMPLE, LA MAYORIA (MODA) VA A APARECER EL DOBLE DE VECES
+    if target_map.values == [0, 1]:
+        undersample = RandomUnderSampler(sampling_strategy=0.5)
+    else:
+        undersample = RandomUnderSampler(sampling_strategy='auto')
 
     trainXUnder,trainYUnder = undersample.fit_resample(trainX,trainY)
     testXUnder,testYUnder = undersample.fit_resample(testX, testY)
 
-    # Explica lo que se hace en este paso
-    clf = KNeighborsClassifier(n_neighbors=5,
-                              weights='uniform',
-                              algorithm='auto',
-                              leaf_size=30,
-                              p=2)
+def knn(k, p):
+    #IMPLEMENTA EL ALGORITMO DE CLASIFICACION POR VOTOS DE K-VECINOS
+    #n_neighbors: NUMERO DE VECINOS / weights: FUNCION DE PESO DE LOS VECINOS / algorithm: ALGORITMO USADO, AUTO ELIGE EL QUE MEJOR SE AJUSTA 
+    #P=1 DISTANCIA DE MANHATTAN, P=2 DISTANCIA EUCLIDEA
+    global clf
+    clf = KNeighborsClassifier(n_neighbors=k, weights='uniform', algorithm='auto', leaf_size=30, p=p)
 
-        # Explica lo que se hace en este paso
-
+    #SE ESTABLECE QUE EL PESO DE LAS CLASES ESTA BALANCEADO
     clf.class_weight = "balanced"
-        # Explica lo que se hace en este paso
-
+    # SE ENTRENA EL ALGORITMO CON LOS DATOS
     clf.fit(trainX, trainY)
 
-
-    # Build up our result dataset
-
-    # The model is now trained, we can apply it to our test set:
-
+    #EL MODELO YA ESTA ENTRENADO, SE AJUSTA AHORA SU EFECTIVIDAD CON LOS TEST
     predictions = clf.predict(testX)
     probas = clf.predict_proba(testX)
-
     predictions = pd.Series(data=predictions, index=testX.index, name='predicted_value')
     cols = [
         u'probability_of_value_%s' % label
      for (_, label) in sorted([(int(target_map[label]), label) for label in target_map])
     ]
+    print(5)
     probabilities = pd.DataFrame(data=probas, index=testX.index, columns=cols)
 
-    # Build scored dataset
+    #CALCULAR RESULTADOS
     results_test = testX.join(predictions, how='left')
     results_test = results_test.join(probabilities, how='left')
     results_test = results_test.join(test['__target__'], how='left')
@@ -248,8 +238,33 @@ def knn(f, k, p):
     print(f1_score(testY, predictions, average=None))
     print(classification_report(testY,predictions))
     print(confusion_matrix(testY, predictions, labels=[1,0]))
-    print("FIN")
-    '''
+    global resultados
+    resultados=classification_report(testY,predictions, output_dict=True)
+    resultados.update({'Accuracy': accuracy_score(testY, predictions)})
+
+def write_csv(k, p, resultados):
+    with open('resultados.csv', 'a') as csvfile:
+        global mk
+        global mp
+        sum_fscore=0
+        parametros=['k', 'p', 'class', 'accuracy', 'recall', 'fscore', 'precision']
+        writer=csv.DictWriter(csvfile, fieldnames=parametros)
+        writer.writeheader
+        for i in resultados.keys()[0:-4]:
+            recall=resultados[str(i)]['recall']
+            fscore=resultados[str(i)]['f1-score']
+            sum_fscore=sum_fscore+fscore
+            precision=resultados[str(i)]['precision']
+            accuracy=resultados['Accuracy']
+            writer.writerow({'k': k, 'p': p, 'class': i, 'accuracy': accuracy, 'recall': recall, 'fscore': fscore, 'precision': precision})
+        writer.writerow({'k': " ", 'p': " ", 'class': " ", 'accuracy': " ", 'recall': " ", 'fscore': " ", 'precision': " "})
+        av_fscore=sum_fscore/(len(resultados.keys())-4)
+        global max_fscore
+        if av_fscore>max_fscore:
+            max_fscore=av_fscore
+            mp=p
+            mk=k
+
 
 if __name__=="__main__":
     main()
