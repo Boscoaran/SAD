@@ -24,7 +24,7 @@ trainY = []
 testX = []
 testY = []
 resultados = dict
-target_map = {'Iris-setosa': 1, 'Iris-versicolor': 2, 'Iris-virginica': 3}
+target_map = {'Iris-setosa': 1, 'Iris-virginica': 2, 'Iris-versicolor': 3}
 clf = object
 mp = 0
 mk = 0
@@ -57,7 +57,7 @@ def main():
         p=int(raw_input("p para el modelo: "))
         knn(k,p)
         n_modelo = n_modelo+".sav"
-        save_model = pickle.dump(clf, open(n_modelo,'wb'))
+        pickle.dump(clf, open(n_modelo,'wb'))
         print("Modelo guardado correctamente empleando Pickle")
 
 
@@ -163,6 +163,7 @@ def preparar_datos(f, t):
  
     #PARA TODAS LAS FEATURES DE TRAIN, SI EL RESCALE METHOD ES MINMAX ______ SINO (AVGSTD) SE CALCULA LA MEDIA Y LA VARIANZA, SI LA VARIANZA ES MUY PEQUENA SE ELIMINA
     #LA FEATURE PORQUE NO PRESENTA CAMBIOS. SI LA VARIANZA ES SIGNIFICATIVA SE LE RESTA A CADA VALOR LA MEDIA Y SE DIVIDE ENTRE LA VARIANZA PARA REESCALARLOS
+    '''
     for (feature_name, rescale_method) in rescale_features.items():
         if rescale_method == 'MINMAX':
             _min = train[feature_name].min()
@@ -178,7 +179,8 @@ def preparar_datos(f, t):
         elif feature_name!='__target__':
             train[feature_name] = (train[feature_name] - shift).astype(np.float64) / scale
             test[feature_name] = (test[feature_name] - shift).astype(np.float64) / scale  
-
+    '''
+    
     global trainX, trainY, testX, testY
 
     trainX = train.drop('__target__', axis=1)
