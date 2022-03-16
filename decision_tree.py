@@ -17,6 +17,8 @@ from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 from sklearn.neighbors import KNeighborsClassifier
 import pickle
+import warnings
+warnings.filterwarnings("ignore")
 
 hf = []
 test = []
@@ -46,11 +48,10 @@ def main():
         writer.writerow({'max_depth': "MAX DEPTH", 'min_samples_leaf': "MIN SAMPLES LEAF", 'class': "CLASS", 'accuracy': "ACCURACY", 'recall': "RECALL ", 'fscore': "F-SCORE ", 'precision': "PRECISION"})
     for x in max_depth:
         for y in min_samples_leaf:
-            print("Ejecutando algoritmo decision tree con max_depth=" + str(x) + " min_samples_leaf=" + str(y))
-            print("\n ################################################## \n")
+            print("Ejecutando algoritmo decision tree con max_depth=" + str(x) + " min_samples_leaf=" + str(y) + "\n")
             decision_tree(x, y)
-            print("\n ################################################## \n")
-            print("Ejecucion de algoritmo decision tree terminada con max_depth=" + str(x) + " min_samples_leaf=" + str(y) + "\n")
+            print("\nEjecucion de algoritmo decision tree terminada con max_depth=" + str(x) + " min_samples_leaf=" + str(y) + "\n")
+            print("################################################## \n")
             write_csv(x, y, resultados)
     guardar_modelo=raw_input("Quieres guardar el modelo? S/N: ")
     if guardar_modelo=='S' or guardar_modelo=='s':
@@ -233,15 +234,11 @@ def decision_tree(m_d, m_s_l):
     results_test = results_test.join(test['__target__'], how='left')
     results_test = results_test.rename(columns= {'__target__': 'TARGET'})
 
-    i=0
-    for real,pred in zip(testY,predictions):
-        print(real,pred)
-        i+=1
-        if i>5:
-            break
-
+    print("F-SCORE:\n")
     print(f1_score(testY, predictions, average=None))
+    print("\n\nCLASSIFICATION REPORT:\n")
     print(classification_report(testY,predictions))
+    print("\nCONFUSION MATRIX:\n")
     print(confusion_matrix(testY, predictions, labels=[1,0]))
     global resultados
     resultados=classification_report(testY,predictions, output_dict=True)

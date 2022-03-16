@@ -17,6 +17,8 @@ from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 from sklearn.neighbors import KNeighborsClassifier
 import pickle
+import warnings
+warnings.filterwarnings("ignore")
 
 hf = []
 test = []
@@ -46,9 +48,10 @@ def main():
         writer.writerow({'k': "K", 'p': "P", 'class': "CLASS", 'accuracy': "ACCURACY", 'recall': "RECALL ", 'fscore': "F-SCORE ", 'precision': "PRECISION"})
     for k in range(1, k_max+1, 2):
         for p in range(1, p_max+1, 2):
-            print("Ejecutando algoritmo knn con k=" + str(k) + " p=" + str(p))
+            print("Ejecutando algoritmo knn con k=" + str(k) + " p=" + str(p) + " \n")
             knn(k, p)
-            print("Ejecucion de algoritmo knn terminada con k=" + str(k) + " p=" + str(p))
+            print("\nEjecucion de algoritmo knn terminada con k=" + str(k) + " p=" + str(p) + " \n")
+            print("################################################## \n")
             write_csv(k, p, resultados)
     guardar_modelo=raw_input("Quieres guardar el modelo? S/N: ")
     if guardar_modelo=='S' or guardar_modelo=='s':
@@ -56,9 +59,11 @@ def main():
         print("Se recomienda usar k = " + str(mk) + " y p = " + str(mp))
         k=int(raw_input("k para el modelo: "))
         p=int(raw_input("p para el modelo: "))
+        print("\n ############################################# \n")
         knn(k,p)
         n_modelo = n_modelo+".sav"
         pickle.dump(clf, open(n_modelo,'wb'))
+        print("\n ############################################# \n")
         print("Modelo guardado correctamente empleando Pickle")
 
 
@@ -208,42 +213,6 @@ def preparar_datos(f, t):
     trainXUnder,trainYUnder = undersample.fit_resample(trainX,trainY)
     testXUnder,testYUnder = undersample.fit_resample(testX, testY)
 
-def arbol():
-    #USANDO TREE
-    global clf
-    x = tree.DecisionTreeClassifier()
-
-    #ENTRENAR ALGORITMO
-    x = x.fit(trainX, trainY)
-
-    predictions = x.predict(testX)
-    probas = x.predict_proba(testX)
-    predictions = pd.Series(data=predictions, index=testX.index, name='predicted_value')
-    cols = [
-        u'probability_of_value_%s' % label
-     for (_, label) in sorted([(int(target_map[label]), label) for label in target_map])
-    ]
-    probabilities = pd.DataFrame(data=probas, index=testX.index, columns=cols)
-    #CALCULAR RESULTADOS
-    results_test = testX.join(predictions, how='left')
-    results_test = results_test.join(probabilities, how='left')
-    results_test = results_test.join(test['__target__'], how='left')
-    results_test = results_test.rename(columns= {'__target__': 'TARGET'})
-
-    i=0
-    for real,pred in zip(testY,predictions):
-        print(real,pred)
-        i+=1
-        if i>5:
-            break
-
-    print(f1_score(testY, predictions, average=None))
-    print(classification_report(testY,predictions))
-    print(confusion_matrix(testY, predictions, labels=[1,0]))
-    global resultados
-    resultados=classification_report(testY,predictions, output_dict=True)
-    resultados.update({'Accuracy': accuracy_score(testY, predictions)})
-
 def knn(k, p):
     #IMPLEMENTA EL ALGORITMO DE CLASIFICACION POR VOTOS DE K-VECINOS
     #n_neighbors: NUMERO DE VECINOS / weights: FUNCION DE PESO DE LOS VECINOS / algorithm: ALGORITMO USADO, AUTO ELIGE EL QUE MEJOR SE AJUSTA 
@@ -272,15 +241,11 @@ def knn(k, p):
     results_test = results_test.join(test['__target__'], how='left')
     results_test = results_test.rename(columns= {'__target__': 'TARGET'})
 
-    i=0
-    for real,pred in zip(testY,predictions):
-        print(real,pred)
-        i+=1
-        if i>5:
-            break
-
+    print("F-SCORE:\n")
     print(f1_score(testY, predictions, average=None))
+    print("\n\nCLASSIFICATION REPORT:\n")
     print(classification_report(testY,predictions))
+    print("\nCONFUSION MATRIX:\n")
     print(confusion_matrix(testY, predictions, labels=[1,0]))
     global resultados
     resultados=classification_report(testY,predictions, output_dict=True)
