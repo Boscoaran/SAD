@@ -1,5 +1,5 @@
 #Bosco Aranguren
-#Plantilla de algoritmo de prediccion knn
+#Plantilla de algoritmo de prediccion decision tree
 
 import sys
 import csv
@@ -27,40 +27,43 @@ testY = []
 resultados = dict
 target_map = {}
 clf = object
-mp = 0
-mk = 0
+md = 0
+ms = 0
 max_fscore=0
 
-#GESTIONA LOS BUCLES DE K Y P
+
 def main():
     file=raw_input("Path del archivo .csv: ")
     target=raw_input("Nombre del dato que se quiere calcular: ")
-    k_max=int(raw_input("Introduce el k maximo: "))
-    p_max=int(raw_input("Introduce el p maximo: "))
+    max_depth=[3,6,9]
+    min_samples_leaf=[1, 2]
     get_features(file)
     preparar_datos(file, target)
-    with open("resultados_knn.csv", 'w') as csvfile:
-        parametros=['k', 'p', 'class', 'accuracy', 'recall', 'fscore', 'precision']
+    with open("resultados_tree.csv", 'w') as csvfile:
+        parametros=['max_depth', 'min_samples_leaf', 'class', 'accuracy', 'recall', 'fscore', 'precision']
         writer=csv.DictWriter(csvfile, fieldnames=parametros)
         writer.writeheader
-        writer.writerow({'k': "K", 'p': "P", 'class': "CLASS", 'accuracy': "ACCURACY", 'recall': "RECALL ", 'fscore': "F-SCORE ", 'precision': "PRECISION"})
-    for k in range(1, k_max+1, 2):
-        for p in range(1, p_max+1, 2):
-            print("Ejecutando algoritmo knn con k=" + str(k) + " p=" + str(p))
-            knn(k, p)
-            print("Ejecucion de algoritmo knn terminada con k=" + str(k) + " p=" + str(p))
-            write_csv(k, p, resultados)
+        writer.writerow({'max_depth': "MAX DEPTH", 'min_samples_leaf': "MIN SAMPLES LEAF", 'class': "CLASS", 'accuracy': "ACCURACY", 'recall': "RECALL ", 'fscore': "F-SCORE ", 'precision': "PRECISION"})
+    for x in max_depth:
+        for y in min_samples_leaf:
+            print("Ejecutando algoritmo decision tree con max_depth=" + str(x) + " min_samples_leaf=" + str(y))
+            print("\n ################################################## \n")
+            decision_tree(x, y)
+            print("\n ################################################## \n")
+            print("Ejecucion de algoritmo decision tree terminada con max_depth=" + str(x) + " min_samples_leaf=" + str(y) + "\n")
+            write_csv(x, y, resultados)
     guardar_modelo=raw_input("Quieres guardar el modelo? S/N: ")
     if guardar_modelo=='S' or guardar_modelo=='s':
         n_modelo = raw_input("Nombre del modelo: ")
-        print("Se recomienda usar k = " + str(mk) + " y p = " + str(mp))
-        k=int(raw_input("k para el modelo: "))
-        p=int(raw_input("p para el modelo: "))
-        knn(k,p)
+        print("Se recomienda usar max_depth = " + str(md) + " y min_samples_leaf = " + str(ms))
+        x=int(raw_input("max_depth para el modelo: "))
+        y=int(raw_input("min_samples_leaf para el modelo: "))
+        print("\n ############################################# \n")
+        decision_tree(x,y)
         n_modelo = n_modelo+".sav"
         pickle.dump(clf, open(n_modelo,'wb'))
+        print("\n ############################################# \n")
         print("Modelo guardado correctamente empleando Pickle")
-
 
 #OBTIENE EL NOMBRE DE LAS FEATURES Y LO ALMACENA EN LA VARIBALE GLOBAL hf (headers features)
 def get_features(f):
@@ -111,7 +114,7 @@ def preparar_datos(f, t):
     l_unique = pd.unique(ml_dataset[t])
     for unique in l_unique:
         target_map.update({ str(unique): i })
-        i += 1  
+        i += 1   
     #PASAR COLUMNA TARGET(DOUBLE) A __target__(0-1)
     #CAMBIAR DEPENDIENDO DEL TIPO DE FEATURE QUE SE QUIERA CLASIFICAR Y EL NOMBRE DE LA FEATURE
     ml_dataset['__target__'] = ml_dataset[t].map(str).map(target_map)
@@ -208,55 +211,14 @@ def preparar_datos(f, t):
     trainXUnder,trainYUnder = undersample.fit_resample(trainX,trainY)
     testXUnder,testYUnder = undersample.fit_resample(testX, testY)
 
-def arbol():
+def decision_tree(m_d, m_s_l):
     #USANDO TREE
     global clf
-    x = tree.DecisionTreeClassifier()
+    clf = tree.DecisionTreeClassifier(max_depth=m_d, min_samples_leaf=m_s_l, class_weight="balanced")
 
     #ENTRENAR ALGORITMO
-    x = x.fit(trainX, trainY)
-
-    predictions = x.predict(testX)
-    probas = x.predict_proba(testX)
-    predictions = pd.Series(data=predictions, index=testX.index, name='predicted_value')
-    cols = [
-        u'probability_of_value_%s' % label
-     for (_, label) in sorted([(int(target_map[label]), label) for label in target_map])
-    ]
-    probabilities = pd.DataFrame(data=probas, index=testX.index, columns=cols)
-    #CALCULAR RESULTADOS
-    results_test = testX.join(predictions, how='left')
-    results_test = results_test.join(probabilities, how='left')
-    results_test = results_test.join(test['__target__'], how='left')
-    results_test = results_test.rename(columns= {'__target__': 'TARGET'})
-
-    i=0
-    for real,pred in zip(testY,predictions):
-        print(real,pred)
-        i+=1
-        if i>5:
-            break
-
-    print(f1_score(testY, predictions, average=None))
-    print(classification_report(testY,predictions))
-    print(confusion_matrix(testY, predictions, labels=[1,0]))
-    global resultados
-    resultados=classification_report(testY,predictions, output_dict=True)
-    resultados.update({'Accuracy': accuracy_score(testY, predictions)})
-
-def knn(k, p):
-    #IMPLEMENTA EL ALGORITMO DE CLASIFICACION POR VOTOS DE K-VECINOS
-    #n_neighbors: NUMERO DE VECINOS / weights: FUNCION DE PESO DE LOS VECINOS / algorithm: ALGORITMO USADO, AUTO ELIGE EL QUE MEJOR SE AJUSTA 
-    #P=1 DISTANCIA DE MANHATTAN, P=2 DISTANCIA EUCLIDEA
-    global clf
-    clf = KNeighborsClassifier(n_neighbors=k, weights='uniform', algorithm='auto', leaf_size=30, p=p)
-
-    #SE ESTABLECE QUE EL PESO DE LAS CLASES ESTA BALANCEADO
-    clf.class_weight = "balanced"
-    # SE ENTRENA EL ALGORITMO CON LOS DATOS
     clf = clf.fit(trainX, trainY)
 
-    #EL MODELO YA ESTA ENTRENADO, SE AJUSTA AHORA SU EFECTIVIDAD CON LOS TEST
     predictions = clf.predict(testX)
     probas = clf.predict_proba(testX)
     predictions = pd.Series(data=predictions, index=testX.index, name='predicted_value')
@@ -265,7 +227,6 @@ def knn(k, p):
      for (_, label) in sorted([(int(target_map[label]), label) for label in target_map])
     ]
     probabilities = pd.DataFrame(data=probas, index=testX.index, columns=cols)
-
     #CALCULAR RESULTADOS
     results_test = testX.join(predictions, how='left')
     results_test = results_test.join(probabilities, how='left')
@@ -286,12 +247,12 @@ def knn(k, p):
     resultados=classification_report(testY,predictions, output_dict=True)
     resultados.update({'Accuracy': accuracy_score(testY, predictions)})
 
-def write_csv(k, p, resultados):
-    with open('resultados_knn.csv', 'a') as csvfile:
-        global mk
-        global mp
+def write_csv(m_d, m_s_l, resultados):
+    with open('resultados_tree.csv', 'a') as csvfile:
+        global md
+        global ms
         sum_fscore=0
-        parametros=['k', 'p', 'class', 'accuracy', 'recall', 'fscore', 'precision']
+        parametros=['max_depth', 'min_samples_leaf', 'class', 'accuracy', 'recall', 'fscore', 'precision']
         writer=csv.DictWriter(csvfile, fieldnames=parametros)
         writer.writeheader
         for i in resultados.keys()[0:-4]:
@@ -300,13 +261,13 @@ def write_csv(k, p, resultados):
             sum_fscore=sum_fscore+fscore
             precision=resultados[str(i)]['precision']
             accuracy=resultados['Accuracy']
-            writer.writerow({'k': k, 'p': p, 'class': i, 'accuracy': accuracy, 'recall': recall, 'fscore': fscore, 'precision': precision})
+            writer.writerow({'max_depth': m_d, 'min_samples_leaf': m_s_l, 'class': i, 'accuracy': accuracy, 'recall': recall, 'fscore': fscore, 'precision': precision})
         av_fscore=sum_fscore/(len(resultados.keys())-4)
         global max_fscore
         if av_fscore>max_fscore:
             max_fscore=av_fscore
-            mp=p
-            mk=k
+            md=m_d
+            ms=m_s_l
 
 
 if __name__=="__main__":
